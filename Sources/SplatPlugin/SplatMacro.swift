@@ -3,6 +3,14 @@ import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
 public struct SplatMacro: MemberMacro {
+    // Helper struct to avoid large tuple warning
+    private struct PropertyInfo {
+        let name: String
+        let type: TypeSyntax
+        let doc: String?
+    }
+
+    // swiftlint:disable:next cyclomatic_complexity
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
@@ -57,12 +65,61 @@ public struct SplatMacro: MemberMacro {
             return text
         }
 
-        // Extract properties from target struct
+        // Helper to trim whitespace using only stdlib
+        func trimWhitespace(_ text: String) -> String {
+            var result = text
+            // Trim leading whitespace
+            while result.first?.isWhitespace == true {
+                result.removeFirst()
+            }
+            // Trim trailing whitespace
+            while result.last?.isWhitespace == true {
+                result.removeLast()
+            }
+            return result
+        }
+
+        // Helper to extract doc comment from trivia
+        func extractDocComment(from variable: VariableDeclSyntax) -> String? {
+            let trivia = variable.leadingTrivia
+            var docLines: [String] = []
+
+            for piece in trivia {
+                switch piece {
+                case .docLineComment(let text):
+                    // Remove "/// " prefix and trim
+                    let cleaned = trimWhitespace(text.trimmingPrefix("///"))
+                    // Keep empty lines to preserve DocC paragraph structure
+                    docLines.append(cleaned)
+                case .docBlockComment(let text):
+                    // Remove "/**" and "*/" and clean up each line
+                    let lines = text
+                        .trimmingPrefix("/**")
+                        .trimmingSuffix("*/")
+                        .split(separator: "\n")
+                        .map { line -> String in
+                            let trimmed = trimWhitespace(String(line))
+                            return trimWhitespace(trimmed.trimmingPrefix("*"))
+                        }
+                        // Keep empty lines for DocC structure
+                    docLines.append(contentsOf: lines)
+                default:
+                    break
+                }
+            }
+
+            // Join lines with proper DocC formatting (newline + indentation)
+            // This preserves DocC callouts like "- Note:", "- Important:", etc.
+            return docLines.isEmpty ? nil : docLines.joined(separator: "\n///     ")
+        }
+
+        // Extract properties from target struct with their documentation
         let properties = targetStruct.memberBlock.members
             .compactMap { $0.decl.as(VariableDeclSyntax.self) }
             .filter { $0.bindings.first?.accessorBlock == nil }  // Only stored properties
-            .flatMap { variable -> [(String, TypeSyntax)] in
-                variable.bindings.compactMap { binding in
+            .flatMap { variable -> [PropertyInfo] in
+                let docComment = extractDocComment(from: variable)
+                return variable.bindings.compactMap { binding in
                     guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
                         let type = binding.typeAnnotation?.type
                     else {
@@ -70,7 +127,7 @@ public struct SplatMacro: MemberMacro {
                     }
                     // Strip backticks from identifier text to avoid double-backticking
                     let name = stripBackticks(identifier.identifier.text)
-                    return (name, type)
+                    return PropertyInfo(name: name, type: type, doc: docComment)
                 }
             }
 
@@ -86,19 +143,19 @@ public struct SplatMacro: MemberMacro {
             }
 
         // Build parameter list
-        let parameters = properties.map { name, type in
+        let parameters = properties.map { property in
             FunctionParameterSyntax(
-                firstName: .identifier("`\(name)`"),
-                type: type
+                firstName: .identifier("`\(property.name)`"),
+                type: property.type
             )
         }
 
         // Build target struct initializer call arguments
-        let argumentsCallArgs = properties.map { name, _ in
+        let argumentsCallArgs = properties.map { property in
             LabeledExprSyntax(
-                label: .identifier("`\(name)`"),
+                label: .identifier("`\(property.name)`"),
                 colon: .colonToken(trailingTrivia: .space),
-                expression: DeclReferenceExprSyntax(baseName: .identifier("`\(name)`"))
+                expression: DeclReferenceExprSyntax(baseName: .identifier("`\(property.name)`"))
             )
         }
 
@@ -122,20 +179,159 @@ public struct SplatMacro: MemberMacro {
         // Build the try keyword if needed
         let tryKeyword = hasThrowingInit ? "try " : ""
 
-        // Generate parameter documentation
-        let parameterDocs = properties.map { name, type in
-            "///   - \(name): \(type.trimmed)"
+        // Extract full documentation from Arguments initializer
+        let (argumentsInitDoc, argumentsParamDocs): (String?, [String: String]) = {
+            let inits = targetStruct.memberBlock.members
+                .compactMap { $0.decl.as(InitializerDeclSyntax.self) }
+
+            guard let firstInit = inits.first else { return (nil, [:]) }
+
+            let trivia = firstInit.leadingTrivia
+            var docLines: [String] = []
+
+            for piece in trivia {
+                switch piece {
+                case .docLineComment(let text):
+                    let cleaned = trimWhitespace(text.trimmingPrefix("///"))
+                    // Keep empty lines to preserve DocC paragraph structure
+                    docLines.append(cleaned)
+                case .docBlockComment(let text):
+                    let lines = text
+                        .trimmingPrefix("/**")
+                        .trimmingSuffix("*/")
+                        .split(separator: "\n")
+                        .map { line -> String in
+                            let trimmed = trimWhitespace(String(line))
+                            return trimWhitespace(trimmed.trimmingPrefix("*"))
+                        }
+                        // Keep empty lines for DocC structure
+                    docLines.append(contentsOf: lines)
+                default:
+                    break
+                }
+            }
+
+            // Find where "- Parameters:" starts
+            guard let paramIndex = docLines.firstIndex(where: { $0.hasPrefix("- Parameters:") }) else {
+                return (docLines.isEmpty ? nil : docLines.joined(separator: "\n/// "), [:])
+            }
+
+            // Extract summary/discussion (everything before - Parameters:)
+            let summaryLines = Array(docLines[..<paramIndex])
+            let summary = summaryLines.isEmpty ? nil : summaryLines.joined(separator: "\n/// ")
+
+            // Extract parameter docs
+            var paramDocs: [String: String] = [:]
+            var currentParam: String?
+            var currentParamLines: [String] = []
+
+            for line in docLines[(paramIndex + 1)...] {
+                if line.hasPrefix("- ") {
+                    // Save previous parameter if exists
+                    if let param = currentParam {
+                        paramDocs[param] = currentParamLines.joined(separator: "\n///     ")
+                    }
+                    // Start new parameter
+                    let parts = line.dropFirst(2).split(separator: ":", maxSplits: 1)
+                    if parts.count == 2 {
+                        currentParam = trimWhitespace(String(parts[0]))
+                        currentParamLines = [trimWhitespace(String(parts[1]))]
+                    }
+                } else {
+                    // Continuation of current parameter
+                    currentParamLines.append(line)
+                }
+            }
+
+            // Save last parameter
+            if let param = currentParam {
+                paramDocs[param] = currentParamLines.joined(separator: "\n///     ")
+            }
+
+            return (summary, paramDocs)
+        }()
+
+        // Generate parameter documentation using Arguments init param docs
+        let parameterDocs = properties.map { property in
+            if let doc = argumentsParamDocs[property.name] {
+                // Use the parameter documentation from Arguments init
+                return "///   - \(property.name): \(doc)"
+            } else if let doc = property.doc {
+                // Fall back to property documentation
+                return "///   - \(property.name): \(doc)"
+            } else {
+                // Last resort: just the type
+                return "///   - \(property.name): \(property.type.trimmed)"
+            }
         }.joined(separator: "\n")
 
-        // Generate throws documentation if needed
-        let throwsDocs = hasThrowingInit ? "\n/// - Throws: Error if initialization fails." : ""
+        // Extract throws documentation from parent struct's init (the one that takes Arguments)
+        let throwsDocs: String = {
+            if !hasThrowingInit {
+                return ""
+            }
+
+            // Find the parent struct's init that takes the Arguments struct
+            let parentInits = declaration.memberBlock.members
+                .compactMap { $0.decl.as(InitializerDeclSyntax.self) }
+
+            for parentInit in parentInits {
+                // Check if it throws
+                guard parentInit.signature.effectSpecifiers?.throwsClause != nil else {
+                    continue
+                }
+
+                // Extract its documentation
+                let trivia = parentInit.leadingTrivia
+                var docLines: [String] = []
+
+                for piece in trivia {
+                    switch piece {
+                    case .docLineComment(let text):
+                        let cleaned = trimWhitespace(text.trimmingPrefix("///"))
+                        docLines.append(cleaned)
+                    case .docBlockComment(let text):
+                        let lines = text
+                            .trimmingPrefix("/**")
+                            .trimmingSuffix("*/")
+                            .split(separator: "\n")
+                            .map { line -> String in
+                                let trimmed = trimWhitespace(String(line))
+                                return trimWhitespace(trimmed.trimmingPrefix("*"))
+                            }
+                        docLines.append(contentsOf: lines)
+                    default:
+                        break
+                    }
+                }
+
+                // Find "- Throws:" line
+                for line in docLines where line.hasPrefix("- Throws:") {
+                    let throwsText = trimWhitespace(String(line.dropFirst("- Throws:".count)))
+                    return "\n/// - Throws: \(throwsText)"
+                }
+            }
+
+            // Fallback if no throws documentation found
+            return "\n/// - Throws: Error if initialization fails."
+        }()
+
+        // Use Arguments init doc if available, otherwise use generic description
+        let summaryDoc: String
+        if let initDoc = argumentsInitDoc {
+            summaryDoc = "/// \(initDoc)"
+        } else {
+            summaryDoc = """
+            /// Initializer accepting ``\(structName)`` properties as individual parameters.
+            ///
+            /// This initializer provides direct parameter access without explicitly creating
+            /// a ``\(structName)`` instance.
+            """
+        }
 
         // Generate the convenience initializer with comprehensive DocC comments
         let initializer: DeclSyntax = """
-            /// Initializer accepting ``\(raw: structName)`` properties as individual parameters.
-            ///
-            /// This initializer provides direct parameter access without explicitly creating
-            /// a ``\(raw: structName)`` instance.
+            \(raw: summaryDoc)
             ///
             /// - Parameters:
             \(raw: parameterDocs)\(raw: throwsDocs)
@@ -163,5 +359,18 @@ enum SplatError: Error, CustomStringConvertible {
         case .noProperties:
             return "Target struct has no stored properties to splat"
         }
+    }
+}
+
+// String helpers for doc comment extraction
+extension String {
+    func trimmingPrefix(_ prefix: String) -> String {
+        guard hasPrefix(prefix) else { return self }
+        return String(dropFirst(prefix.count))
+    }
+
+    func trimmingSuffix(_ suffix: String) -> String {
+        guard hasSuffix(suffix) else { return self }
+        return String(dropLast(suffix.count))
     }
 }
