@@ -1,5 +1,6 @@
-@testable import Splat
 import Testing
+
+@testable import Splat
 
 @Test func `verify DocC comment generation`() throws {
     @Splat

@@ -93,7 +93,8 @@ public struct SplatMacro: MemberMacro {
                     docLines.append(cleaned)
                 case .docBlockComment(let text):
                     // Remove "/**" and "*/" and clean up each line
-                    let lines = text
+                    let lines =
+                        text
                         .trimmingPrefix("/**")
                         .trimmingSuffix("*/")
                         .split(separator: "\n")
@@ -101,7 +102,7 @@ public struct SplatMacro: MemberMacro {
                             let trimmed = trimWhitespace(String(line))
                             return trimWhitespace(trimmed.trimmingPrefix("*"))
                         }
-                        // Keep empty lines for DocC structure
+                    // Keep empty lines for DocC structure
                     docLines.append(contentsOf: lines)
                 default:
                     break
@@ -196,7 +197,8 @@ public struct SplatMacro: MemberMacro {
                     // Keep empty lines to preserve DocC paragraph structure
                     docLines.append(cleaned)
                 case .docBlockComment(let text):
-                    let lines = text
+                    let lines =
+                        text
                         .trimmingPrefix("/**")
                         .trimmingSuffix("*/")
                         .split(separator: "\n")
@@ -204,7 +206,7 @@ public struct SplatMacro: MemberMacro {
                             let trimmed = trimWhitespace(String(line))
                             return trimWhitespace(trimmed.trimmingPrefix("*"))
                         }
-                        // Keep empty lines for DocC structure
+                    // Keep empty lines for DocC structure
                     docLines.append(contentsOf: lines)
                 default:
                     break
@@ -212,7 +214,8 @@ public struct SplatMacro: MemberMacro {
             }
 
             // Find where "- Parameters:" starts
-            guard let paramIndex = docLines.firstIndex(where: { $0.hasPrefix("- Parameters:") }) else {
+            guard let paramIndex = docLines.firstIndex(where: { $0.hasPrefix("- Parameters:") })
+            else {
                 return (docLines.isEmpty ? nil : docLines.joined(separator: "\n/// "), [:])
             }
 
@@ -291,7 +294,8 @@ public struct SplatMacro: MemberMacro {
                         let cleaned = trimWhitespace(text.trimmingPrefix("///"))
                         docLines.append(cleaned)
                     case .docBlockComment(let text):
-                        let lines = text
+                        let lines =
+                            text
                             .trimmingPrefix("/**")
                             .trimmingSuffix("*/")
                             .split(separator: "\n")
@@ -322,11 +326,11 @@ public struct SplatMacro: MemberMacro {
             summaryDoc = "/// \(initDoc)"
         } else {
             summaryDoc = """
-            /// Initializer accepting ``\(structName)`` properties as individual parameters.
-            ///
-            /// This initializer provides direct parameter access without explicitly creating
-            /// a ``\(structName)`` instance.
-            """
+                /// Initializer accepting ``\(structName)`` properties as individual parameters.
+                ///
+                /// This initializer provides direct parameter access without explicitly creating
+                /// a ``\(structName)`` instance.
+                """
         }
 
         // Generate the convenience initializer with comprehensive DocC comments
