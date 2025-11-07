@@ -1,3 +1,4 @@
+import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -8,6 +9,14 @@ public struct SplatMacro: MemberMacro {
         let name: String
         let type: TypeSyntax
         let doc: String?
+        let path: [String]  // Path to this property (e.g., ["lid1", "condition"])
+
+        init(name: String, type: TypeSyntax, doc: String?, path: [String] = []) {
+            self.name = name
+            self.type = type
+            self.doc = doc
+            self.path = path
+        }
     }
 
     // swiftlint:disable:next cyclomatic_complexity
@@ -79,6 +88,74 @@ public struct SplatMacro: MemberMacro {
             return result
         }
 
+        // Helper to recursively collect properties, including from nested Arguments structs
+        func collectProperties(
+            from targetStruct: StructDeclSyntax,
+            in declaration: some DeclGroupSyntax,
+            path: [String] = []
+        ) -> [PropertyInfo] {
+            // Extract direct properties from this struct
+            let directProperties = targetStruct.memberBlock.members
+                .compactMap { $0.decl.as(VariableDeclSyntax.self) }
+                .filter { $0.bindings.first?.accessorBlock == nil }  // Only stored properties
+                .flatMap { variable -> [PropertyInfo] in
+                    let docComment = extractDocComment(from: variable)
+                    return variable.bindings.compactMap { binding in
+                        guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
+                            let type = binding.typeAnnotation?.type
+                        else {
+                            return nil
+                        }
+                        let name = stripBackticks(identifier.identifier.text)
+                        return PropertyInfo(name: name, type: type, doc: docComment, path: path)
+                    }
+                }
+
+            // Check each property to see if it's a nested Arguments type
+            var allProperties: [PropertyInfo] = []
+
+            for property in directProperties {
+                // Check if this property's type is SomeType.Arguments
+                let typeString = property.type.trimmed.description
+
+                if typeString.hasSuffix(".Arguments") {
+                    // Extract the parent type name (e.g., "Lid 1" from "`Lid 1`.Arguments")
+                    var parentTypeName = typeString
+                    if parentTypeName.hasSuffix(".Arguments") {
+                        parentTypeName = String(parentTypeName.dropLast(".Arguments".count))
+                    }
+                    // Remove leading/trailing backticks
+                    parentTypeName = parentTypeName.trimmingCharacters(in: CharacterSet(charactersIn: "`"))
+
+                    // Find the struct for this nested Arguments
+                    if let nestedStruct = declaration.memberBlock.members
+                        .compactMap({ $0.decl.as(StructDeclSyntax.self) })
+                        .first(where: { stripBackticks($0.name.text) == parentTypeName }),
+                       let nestedArgumentsStruct = nestedStruct.memberBlock.members
+                        .compactMap({ $0.decl.as(StructDeclSyntax.self) })
+                        .first(where: { $0.name.text == "Arguments" })
+                    {
+                        // Recursively collect properties from the nested Arguments struct
+                        let nestedPath = path + [property.name]
+                        let nestedProperties = collectProperties(
+                            from: nestedArgumentsStruct,
+                            in: declaration,
+                            path: nestedPath
+                        )
+                        allProperties.append(contentsOf: nestedProperties)
+                    } else {
+                        // Couldn't find nested struct, keep the property as-is
+                        allProperties.append(property)
+                    }
+                } else {
+                    // Not a nested Arguments type, keep as-is
+                    allProperties.append(property)
+                }
+            }
+
+            return allProperties
+        }
+
         // Helper to extract doc comment from trivia
         func extractDocComment(from variable: VariableDeclSyntax) -> String? {
             let trivia = variable.leadingTrivia
@@ -115,22 +192,8 @@ public struct SplatMacro: MemberMacro {
         }
 
         // Extract properties from target struct with their documentation
-        let properties = targetStruct.memberBlock.members
-            .compactMap { $0.decl.as(VariableDeclSyntax.self) }
-            .filter { $0.bindings.first?.accessorBlock == nil }  // Only stored properties
-            .flatMap { variable -> [PropertyInfo] in
-                let docComment = extractDocComment(from: variable)
-                return variable.bindings.compactMap { binding in
-                    guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
-                        let type = binding.typeAnnotation?.type
-                    else {
-                        return nil
-                    }
-                    // Strip backticks from identifier text to avoid double-backticking
-                    let name = stripBackticks(identifier.identifier.text)
-                    return PropertyInfo(name: name, type: type, doc: docComment)
-                }
-            }
+        // This recursively collects properties from nested Arguments structs
+        let properties = collectProperties(from: targetStruct, in: declaration)
 
         guard !properties.isEmpty else {
             throw SplatError.noProperties
@@ -152,13 +215,48 @@ public struct SplatMacro: MemberMacro {
         }
 
         // Build target struct initializer call arguments
-        let argumentsCallArgs = properties.map { property in
-            LabeledExprSyntax(
-                label: .identifier("`\(property.name)`"),
-                colon: .colonToken(trailingTrivia: .space),
-                expression: DeclReferenceExprSyntax(baseName: .identifier("`\(property.name)`"))
-            )
+        // Group properties by their path to construct nested Arguments structs
+        func buildArgumentsInit(properties: [PropertyInfo]) -> String {
+            // Check if all properties have the same empty path (direct properties)
+            let allDirect = properties.allSatisfy { $0.path.isEmpty }
+
+            if allDirect {
+                // All properties are direct - just list them
+                return properties.map { "`\($0.name)`: `\($0.name)`" }.joined(separator: ", ")
+            }
+
+            // Group properties by their first path component
+            let grouped = Dictionary(grouping: properties) { $0.path.first }
+
+            let args = grouped.sorted { a, b in
+                // Sort by first path component (nil first, then alphabetically)
+                guard let aKey = a.key else { return true }
+                guard let bKey = b.key else { return false }
+                return aKey < bKey
+            }.map { key, props -> String in
+                if let pathComponent = key {
+                    // Has nested path - recursively build nested init
+                    // Remove first path component from each property
+                    let nestedProps = props.map { prop in
+                        PropertyInfo(
+                            name: prop.name,
+                            type: prop.type,
+                            doc: prop.doc,
+                            path: Array(prop.path.dropFirst())
+                        )
+                    }
+                    let nestedInit = buildArgumentsInit(properties: nestedProps)
+                    return "`\(pathComponent)`: .init(\(nestedInit))"
+                } else {
+                    // No nested path - direct properties
+                    return props.map { "`\($0.name)`: `\($0.name)`" }.joined(separator: ", ")
+                }
+            }.joined(separator: ",\n        ")
+
+            return args
         }
+
+        let argumentsCallArgs = buildArgumentsInit(properties: properties)
 
         // Determine if we need typed throws
         let throwsClause: String
@@ -343,7 +441,7 @@ public struct SplatMacro: MemberMacro {
                 \(raw: parameters.map { "\($0)" }.joined(separator: ",\n    "))
             ) \(raw: throwsClause) {
                 \(raw: tryKeyword)self.init(\(raw: structName)(
-                    \(raw: argumentsCallArgs.map { "\($0)" }.joined(separator: ",\n        "))
+                    \(raw: argumentsCallArgs)
                 ))
             }
             """

@@ -143,4 +143,49 @@ struct SplatTests {
         let machine = Machine(isActive: true)
         #expect(machine.state.isActive == true)
     }
+
+    @Test func `splat with nested Arguments`() {
+        @Splat
+        struct Article: Sendable {
+            let arguments: Arguments
+
+            init(_ arguments: Arguments) {
+                self.arguments = arguments
+            }
+
+            struct Arguments: Sendable {
+                let lid1: Lid1.Arguments
+                let lid2: Lid2.Arguments
+            }
+
+            // Nested struct definitions that Arguments references
+            struct Lid1 {
+                struct Arguments: Sendable {
+                    let condition1: Bool
+                    let condition2: Bool
+                }
+            }
+
+            struct Lid2 {
+                struct Arguments: Sendable {
+                    let exception1: Bool
+                    let exception2: Bool
+                }
+            }
+        }
+
+        // Test flattened initializer - all 4 parameters in one call
+        let article = Article(
+            condition1: true,
+            condition2: false,
+            exception1: false,
+            exception2: true
+        )
+
+        // Verify nested structure was constructed correctly
+        #expect(article.arguments.lid1.condition1 == true)
+        #expect(article.arguments.lid1.condition2 == false)
+        #expect(article.arguments.lid2.exception1 == false)
+        #expect(article.arguments.lid2.exception2 == true)
+    }
 }
