@@ -94,6 +94,17 @@ public struct SplatMacro: MemberMacro {
             in declaration: some DeclGroupSyntax,
             path: [String] = []
         ) -> [PropertyInfo] {
+            // First, check if Arguments.init() has any parameters
+            let hasInitParameters = targetStruct.memberBlock.members
+                .compactMap { $0.decl.as(InitializerDeclSyntax.self) }
+                .first?
+                .signature.parameterClause.parameters.isEmpty == false
+
+            // If init has no parameters, don't collect properties (they must have default values)
+            if !hasInitParameters {
+                return []
+            }
+
             // Extract direct properties from this struct
             let directProperties = targetStruct.memberBlock.members
                 .compactMap { $0.decl.as(VariableDeclSyntax.self) }
@@ -195,8 +206,39 @@ public struct SplatMacro: MemberMacro {
         // This recursively collects properties from nested Arguments structs
         let properties = collectProperties(from: targetStruct, in: declaration)
 
+        // Check if the containing struct has any output properties (properties other than arguments)
+        // If not, this is a "witness type" and the result can be discarded
+        let allStoredProperties = declaration.memberBlock.members
+            .compactMap { $0.decl.as(VariableDeclSyntax.self) }
+            .filter { $0.bindings.first?.accessorBlock == nil }  // Only stored properties
+
+        let hasOutputProperties = allStoredProperties.contains { variable in
+            variable.bindings.contains { binding in
+                guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self) else {
+                    return false
+                }
+                let name = stripBackticks(identifier.identifier.text)
+                return name != propertyName  // Not the arguments property
+            }
+        }
+
+        let discardableResultAttr = hasOutputProperties ? "" : "@discardableResult\n"
+
+        // If no properties to splat (empty init with default values), generate simple passthrough
         guard !properties.isEmpty else {
-            throw SplatError.noProperties
+            // Generate a simple initializer that just calls Arguments()
+            let summaryDoc = """
+            /// Initializer that creates a ``\(structName)`` instance with default values.
+            """
+
+            let simpleInit: DeclSyntax = """
+                \(raw: discardableResultAttr)\(raw: summaryDoc)
+                public init() {
+                    self.init(\(raw: structName)())
+                }
+                """
+
+            return [simpleInit]
         }
 
         // Find if there's a throwing initializer
@@ -433,7 +475,7 @@ public struct SplatMacro: MemberMacro {
 
         // Generate the convenience initializer with comprehensive DocC comments
         let initializer: DeclSyntax = """
-            \(raw: summaryDoc)
+            \(raw: discardableResultAttr)\(raw: summaryDoc)
             ///
             /// - Parameters:
             \(raw: parameterDocs)\(raw: throwsDocs)
