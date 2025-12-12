@@ -95,7 +95,8 @@ public struct SplatMacro: MemberMacro {
             path: [String] = []
         ) -> [PropertyInfo] {
             // First, check if Arguments.init() has any parameters
-            let hasInitParameters = targetStruct.memberBlock.members
+            let hasInitParameters =
+                targetStruct.memberBlock.members
                 .compactMap { $0.decl.as(InitializerDeclSyntax.self) }
                 .first?
                 .signature.parameterClause.parameters.isEmpty == false
@@ -136,15 +137,17 @@ public struct SplatMacro: MemberMacro {
                         parentTypeName = String(parentTypeName.dropLast(".Arguments".count))
                     }
                     // Remove leading/trailing backticks
-                    parentTypeName = parentTypeName.trimmingCharacters(in: CharacterSet(charactersIn: "`"))
+                    parentTypeName = parentTypeName.trimmingCharacters(
+                        in: CharacterSet(charactersIn: "`")
+                    )
 
                     // Find the struct for this nested Arguments
                     if let nestedStruct = declaration.memberBlock.members
                         .compactMap({ $0.decl.as(StructDeclSyntax.self) })
                         .first(where: { stripBackticks($0.name.text) == parentTypeName }),
-                       let nestedArgumentsStruct = nestedStruct.memberBlock.members
-                        .compactMap({ $0.decl.as(StructDeclSyntax.self) })
-                        .first(where: { $0.name.text == "Arguments" })
+                        let nestedArgumentsStruct = nestedStruct.memberBlock.members
+                            .compactMap({ $0.decl.as(StructDeclSyntax.self) })
+                            .first(where: { $0.name.text == "Arguments" })
                     {
                         // Recursively collect properties from the nested Arguments struct
                         let nestedPath = path + [property.name]
@@ -228,8 +231,8 @@ public struct SplatMacro: MemberMacro {
         guard !properties.isEmpty else {
             // Generate a simple initializer that just calls Arguments()
             let summaryDoc = """
-            /// Initializer that creates a ``\(structName)`` instance with default values.
-            """
+                /// Initializer that creates a ``\(structName)`` instance with default values.
+                """
 
             let simpleInit: DeclSyntax = """
                 \(raw: discardableResultAttr)\(raw: summaryDoc)
