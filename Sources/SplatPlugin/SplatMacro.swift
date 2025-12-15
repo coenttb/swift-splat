@@ -100,7 +100,8 @@ public struct SplatMacro: MemberMacro {
 
             // If there's an explicit init with no parameters, assume all properties have defaults
             if let firstInit = explicitInits.first,
-               firstInit.signature.parameterClause.parameters.isEmpty {
+                firstInit.signature.parameterClause.parameters.isEmpty
+            {
                 return []
             }
 
