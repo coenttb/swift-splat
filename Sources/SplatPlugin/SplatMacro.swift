@@ -94,17 +94,17 @@ public struct SplatMacro: MemberMacro {
             in declaration: some DeclGroupSyntax,
             path: [String] = []
         ) -> [PropertyInfo] {
-            // First, check if Arguments.init() has any parameters
-            let hasInitParameters =
-                targetStruct.memberBlock.members
+            // Check if there's an explicit init with no parameters (all defaults)
+            let explicitInits = targetStruct.memberBlock.members
                 .compactMap { $0.decl.as(InitializerDeclSyntax.self) }
-                .first?
-                .signature.parameterClause.parameters.isEmpty == false
 
-            // If init has no parameters, don't collect properties (they must have default values)
-            if !hasInitParameters {
+            // If there's an explicit init with no parameters, assume all properties have defaults
+            if let firstInit = explicitInits.first,
+               firstInit.signature.parameterClause.parameters.isEmpty {
                 return []
             }
+
+            // Otherwise, collect properties (either from explicit init with params or synthesized memberwise init)
 
             // Extract direct properties from this struct
             let directProperties = targetStruct.memberBlock.members
@@ -312,7 +312,7 @@ public struct SplatMacro: MemberMacro {
                 .first(where: { $0.signature.effectSpecifiers?.throwsClause != nil })?
                 .signature.effectSpecifiers?.throwsClause?.type
             {
-                throwsClause = "throws(\(errorType.trimmed))"
+                throwsClause = "throws(Self.\(errorType.trimmed))"
             } else {
                 throwsClause = "throws"
             }
