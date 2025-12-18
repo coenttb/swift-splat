@@ -228,6 +228,42 @@ public struct SplatMacro: MemberMacro {
 
         let discardableResultAttr = hasOutputProperties ? "" : "@discardableResult\n"
 
+        // Find if there's a throwing initializer in the parent struct
+        let hasThrowingParentInit = declaration.memberBlock.members
+            .compactMap { $0.decl.as(InitializerDeclSyntax.self) }
+            .contains { initializer in
+                initializer.signature.effectSpecifiers?.throwsClause != nil
+            }
+
+        // Check if the Arguments struct has a throwing initializer
+        let hasThrowingArgumentsInit = targetStruct.memberBlock.members
+            .compactMap { $0.decl.as(InitializerDeclSyntax.self) }
+            .contains { initializer in
+                initializer.signature.effectSpecifiers?.throwsClause != nil
+            }
+
+        // Need try if either the parent or Arguments init throws
+        let hasThrowingInit = hasThrowingParentInit || hasThrowingArgumentsInit
+
+        // Get throws clause for simple init (needed before the guard)
+        let simpleThrowsClause: String
+        let simpleTryKeyword: String
+        if hasThrowingInit {
+            if let errorType = declaration.memberBlock.members
+                .compactMap({ $0.decl.as(InitializerDeclSyntax.self) })
+                .first(where: { $0.signature.effectSpecifiers?.throwsClause != nil })?
+                .signature.effectSpecifiers?.throwsClause?.type
+            {
+                simpleThrowsClause = "throws(Self.\(errorType.trimmed)) "
+            } else {
+                simpleThrowsClause = "throws "
+            }
+            simpleTryKeyword = "try "
+        } else {
+            simpleThrowsClause = ""
+            simpleTryKeyword = ""
+        }
+
         // If no properties to splat (empty init with default values), generate simple passthrough
         guard !properties.isEmpty else {
             // Generate a simple initializer that just calls Arguments()
@@ -237,20 +273,13 @@ public struct SplatMacro: MemberMacro {
 
             let simpleInit: DeclSyntax = """
                 \(raw: discardableResultAttr)\(raw: summaryDoc)
-                public init() {
-                    self.init(\(raw: structName)())
+                public init() \(raw: simpleThrowsClause){
+                    \(raw: simpleTryKeyword)self.init(\(raw: structName)())
                 }
                 """
 
             return [simpleInit]
         }
-
-        // Find if there's a throwing initializer
-        let hasThrowingInit = declaration.memberBlock.members
-            .compactMap { $0.decl.as(InitializerDeclSyntax.self) }
-            .contains { initializer in
-                initializer.signature.effectSpecifiers?.throwsClause != nil
-            }
 
         // Build parameter list
         let parameters = properties.map { property in

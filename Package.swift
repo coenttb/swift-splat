@@ -34,11 +34,18 @@ let package = Package(
             dependencies: ["SplatPlugin"]
         ),
 
+        // Test fixtures for cross-module testing
+        .target(
+            name: "SplatTestFixtures",
+            dependencies: ["Splat"]
+        ),
+
         // Tests
         .testTarget(
             name: "SplatTests",
             dependencies: [
                 "Splat",
+                "SplatTestFixtures",
                 .product(name: "MacroTesting", package: "swift-macro-testing")
             ]
         )
