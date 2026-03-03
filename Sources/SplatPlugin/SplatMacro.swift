@@ -5,17 +5,19 @@ import SwiftSyntaxMacros
 
 public struct SplatMacro: MemberMacro {
     // Helper struct to avoid large tuple warning
-    private struct PropertyInfo {
+    struct PropertyInfo {
         let name: String
         let type: TypeSyntax
         let doc: String?
         let path: [String]  // Path to this property (e.g., ["lid1", "condition"])
+        let defaultValue: InitializerClauseSyntax?
 
-        init(name: String, type: TypeSyntax, doc: String?, path: [String] = []) {
+        init(name: String, type: TypeSyntax, doc: String?, path: [String] = [], defaultValue: InitializerClauseSyntax? = nil) {
             self.name = name
             self.type = type
             self.doc = doc
             self.path = path
+            self.defaultValue = defaultValue
         }
     }
 
@@ -107,6 +109,18 @@ public struct SplatMacro: MemberMacro {
 
             // Otherwise, collect properties (either from explicit init with params or synthesized memberwise init)
 
+            // Build a map of parameter name → default value from the explicit init
+            let defaultsByName: [String: InitializerClauseSyntax] = {
+                guard let firstInit = explicitInits.first else { return [:] }
+                var defaults: [String: InitializerClauseSyntax] = [:]
+                for param in firstInit.signature.parameterClause.parameters {
+                    guard let defaultValue = param.defaultValue else { continue }
+                    let name = stripBackticks(param.firstName.text)
+                    defaults[name] = defaultValue
+                }
+                return defaults
+            }()
+
             // Extract direct properties from this struct
             let directProperties = targetStruct.memberBlock.members
                 .compactMap { $0.decl.as(VariableDeclSyntax.self) }
@@ -120,7 +134,7 @@ public struct SplatMacro: MemberMacro {
                             return nil
                         }
                         let name = stripBackticks(identifier.identifier.text)
-                        return PropertyInfo(name: name, type: type, doc: docComment, path: path)
+                        return PropertyInfo(name: name, type: type, doc: docComment, path: path, defaultValue: defaultsByName[name])
                     }
                 }
 
@@ -210,6 +224,7 @@ public struct SplatMacro: MemberMacro {
         // This recursively collects properties from nested Arguments structs
         let properties = collectProperties(from: targetStruct, in: declaration)
 
+
         // Check if the containing struct has any output properties (properties other than arguments)
         // If not, this is a "witness type" and the result can be discarded
         let allStoredProperties = declaration.memberBlock.members
@@ -285,7 +300,8 @@ public struct SplatMacro: MemberMacro {
         let parameters = properties.map { property in
             FunctionParameterSyntax(
                 firstName: .identifier("`\(property.name)`"),
-                type: property.type
+                type: property.type,
+                defaultValue: property.defaultValue
             )
         }
 
@@ -317,7 +333,8 @@ public struct SplatMacro: MemberMacro {
                             name: prop.name,
                             type: prop.type,
                             doc: prop.doc,
-                            path: Array(prop.path.dropFirst())
+                            path: Array(prop.path.dropFirst()),
+                            defaultValue: prop.defaultValue
                         )
                     }
                     let nestedInit = buildArgumentsInit(properties: nestedProps)
@@ -521,7 +538,11 @@ public struct SplatMacro: MemberMacro {
             }
             """
 
-        return [initializer]
+        var declarations: [DeclSyntax] = [initializer]
+        if let allCases = ExhaustiveCases.generate(properties: properties, structName: structName) {
+            declarations.append(allCases)
+        }
+        return declarations
     }
 }
 
