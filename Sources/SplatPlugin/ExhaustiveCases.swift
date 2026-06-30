@@ -30,18 +30,18 @@ enum ExhaustiveCases {
     private static func isBoolOptional(_ type: TypeSyntax) -> Bool {
         // Match `Bool?`
         if let optional = type.as(OptionalTypeSyntax.self),
-           let identifier = optional.wrappedType.as(IdentifierTypeSyntax.self),
-           identifier.name.text == "Bool"
+            let identifier = optional.wrappedType.as(IdentifierTypeSyntax.self),
+            identifier.name.text == "Bool"
         {
             return true
         }
         // Match `Optional<Bool>`
         if let identifier = type.as(IdentifierTypeSyntax.self),
-           identifier.name.text == "Optional",
-           let genericArgs = identifier.genericArgumentClause,
-           genericArgs.arguments.count == 1,
-           let inner = genericArgs.arguments.first?.argument.as(IdentifierTypeSyntax.self),
-           inner.name.text == "Bool"
+            identifier.name.text == "Optional",
+            let genericArgs = identifier.genericArgumentClause,
+            genericArgs.arguments.count == 1,
+            let inner = genericArgs.arguments.first?.argument.as(IdentifierTypeSyntax.self),
+            inner.name.text == "Bool"
         {
             return true
         }

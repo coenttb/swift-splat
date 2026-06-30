@@ -30,7 +30,13 @@ public struct SplatMacro: MemberMacro {
         let path: [String]  // Path to this property (e.g., ["lid1", "condition"])
         let defaultValue: InitializerClauseSyntax?
 
-        init(name: String, type: TypeSyntax, doc: String?, path: [String] = [], defaultValue: InitializerClauseSyntax? = nil) {
+        init(
+            name: String,
+            type: TypeSyntax,
+            doc: String?,
+            path: [String] = [],
+            defaultValue: InitializerClauseSyntax? = nil
+        ) {
             self.name = name
             self.type = type
             self.doc = doc
@@ -153,7 +159,13 @@ public struct SplatMacro: MemberMacro {
                             return nil
                         }
                         let name = stripBackticks(identifier.identifier.text)
-                        return PropertyInfo(name: name, type: type, doc: docComment, path: path, defaultValue: defaultsByName[name])
+                        return PropertyInfo(
+                            name: name,
+                            type: type,
+                            doc: docComment,
+                            path: path,
+                            defaultValue: defaultsByName[name]
+                        )
                     }
                 }
 
@@ -243,7 +255,6 @@ public struct SplatMacro: MemberMacro {
         // This recursively collects properties from nested Arguments structs
         let properties = collectProperties(from: targetStruct, in: declaration)
 
-
         // Check if the containing struct has any output properties (properties other than arguments)
         // If not, this is a "witness type" and the result can be discarded
         let allStoredProperties = declaration.memberBlock.members
@@ -332,7 +343,9 @@ public struct SplatMacro: MemberMacro {
 
             if allDirect {
                 // All properties are direct - just list them
-                return properties.map { "\(splatArgumentLabel($0.name)): `\($0.name)`" }.joined(separator: ", ")
+                return properties.map { "\(splatArgumentLabel($0.name)): `\($0.name)`" }.joined(
+                    separator: ", "
+                )
             }
 
             // Group properties by their first path component
@@ -360,7 +373,9 @@ public struct SplatMacro: MemberMacro {
                     return "\(splatArgumentLabel(pathComponent)): .init(\(nestedInit))"
                 } else {
                     // No nested path - direct properties
-                    return props.map { "\(splatArgumentLabel($0.name)): `\($0.name)`" }.joined(separator: ", ")
+                    return props.map { "\(splatArgumentLabel($0.name)): `\($0.name)`" }.joined(
+                        separator: ", "
+                    )
                 }
             }.joined(separator: ",\n        ")
 

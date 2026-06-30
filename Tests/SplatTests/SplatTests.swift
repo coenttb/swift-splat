@@ -266,7 +266,10 @@ struct SplatTests {
                 let found = Rule.allCases.contains { args in
                     args.a == v0 && args.b == v1
                 }
-                #expect(found, "Missing combination a=\(String(describing: v0)), b=\(String(describing: v1))")
+                #expect(
+                    found,
+                    "Missing combination a=\(String(describing: v0)), b=\(String(describing: v1))"
+                )
             }
         }
     }
