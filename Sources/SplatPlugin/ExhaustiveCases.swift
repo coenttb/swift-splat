@@ -54,7 +54,7 @@ enum ExhaustiveCases {
     ) -> String {
         let n = properties.count
         let args = properties.enumerated().map { i, prop in
-            "`\(prop.name)`: v\(i)"
+            "\(splatArgumentLabel(prop.name)): v\(i)"
         }.joined(separator: ", ")
         let initCall = "\(structName)(\(args))"
 

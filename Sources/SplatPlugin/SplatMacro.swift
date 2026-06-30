@@ -3,6 +3,24 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
+/// Backtick-escape an identifier for use as an *argument label* only when needed.
+///
+/// Plain identifiers and keywords are valid bare as argument labels, so escaping
+/// them emits a "keyword 'X' does not need to be escaped in argument list" warning
+/// in consumer builds. Natural-language names (e.g. the legal domain's
+/// space-containing property names) are not valid bare and must stay escaped.
+func splatArgumentLabel(_ name: String) -> String {
+    let bare: String =
+        (name.hasPrefix("`") && name.hasSuffix("`") && name.count >= 2)
+        ? String(name.dropFirst().dropLast())
+        : name
+    guard let first = bare.first else { return "`\(name)`" }
+    let isPlainIdentifier =
+        (first == "_" || first.isLetter)
+        && bare.dropFirst().allSatisfy { $0 == "_" || $0.isLetter || $0.isNumber }
+    return isPlainIdentifier ? bare : "`\(bare)`"
+}
+
 public struct SplatMacro: MemberMacro {
     // Helper struct to avoid large tuple warning
     struct PropertyInfo {
@@ -314,7 +332,7 @@ public struct SplatMacro: MemberMacro {
 
             if allDirect {
                 // All properties are direct - just list them
-                return properties.map { "`\($0.name)`: `\($0.name)`" }.joined(separator: ", ")
+                return properties.map { "\(splatArgumentLabel($0.name)): `\($0.name)`" }.joined(separator: ", ")
             }
 
             // Group properties by their first path component
@@ -339,10 +357,10 @@ public struct SplatMacro: MemberMacro {
                         )
                     }
                     let nestedInit = buildArgumentsInit(properties: nestedProps)
-                    return "`\(pathComponent)`: .init(\(nestedInit))"
+                    return "\(splatArgumentLabel(pathComponent)): .init(\(nestedInit))"
                 } else {
                     // No nested path - direct properties
-                    return props.map { "`\($0.name)`: `\($0.name)`" }.joined(separator: ", ")
+                    return props.map { "\(splatArgumentLabel($0.name)): `\($0.name)`" }.joined(separator: ", ")
                 }
             }.joined(separator: ",\n        ")
 
