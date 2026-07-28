@@ -1,0 +1,14 @@
+# .github/metadata.yaml
+description: "Swift macro for generating convenience initializers by splatting nested struct properties."
+homepage: "https://swift-institute.org"
+topics:
+  - code-generation
+  - convenience-initializers
+  - spm
+  - swift
+  - swift-6
+  - swift-macro
+  - swift-macros
+  - swift-package-manager
+readme:
+  family: E
