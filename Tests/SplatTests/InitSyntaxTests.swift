@@ -30,7 +30,7 @@ struct InitSyntaxTests {
     func explicitInitTypedThrows() {
         // Using TypeName.init(args) syntax - explicit init
         do {
-            _ = try TypedThrowsFixture.init(isValid: false)
+            _ = try TypedThrowsFixture(isValid: false)
             Issue.record("Should have thrown")
         } catch {
             #expect(error.reason == "Validation failed: isValid was false")
@@ -49,7 +49,7 @@ struct InitSyntaxTests {
     @Test
     func regularExplicitInit() {
         // Using RegularNamespace.Three10.One.init(args) syntax - explicit init
-        let result = RegularNamespace.Three10.One.init(conditionSatisfied: true)
+        let result = RegularNamespace.Three10.One(conditionSatisfied: true)
         #expect(result.output == .valid)
     }
 
