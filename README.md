@@ -26,7 +26,7 @@ Add `swift-splat` to your Package.swift:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/coenttb/swift-splat.git", from: "0.1.0")
+    .package(url: "https://github.com/coenttb/swift-splat.git", from: "0.3.2")
 ]
 ```
 
