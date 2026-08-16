@@ -41,7 +41,7 @@ struct SplatTests {
                 let isAlive: Bool
             }
 
-            struct ValidationError: Error {}
+            struct ValidationError: Swift.Error {}
         }
 
         // Test successful case
@@ -70,7 +70,7 @@ struct SplatTests {
                 let isAlive: Bool
             }
 
-            struct ValidationError: Error {}
+            struct ValidationError: Swift.Error {}
         }
 
         // Test successful case
@@ -109,7 +109,7 @@ struct SplatTests {
                 let isDeceased: Bool?
             }
 
-            struct ValidationError: Error {}
+            struct ValidationError: Swift.Error {}
         }
 
         // Test with one option true

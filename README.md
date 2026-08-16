@@ -237,7 +237,7 @@ However, requiring explicit Arguments construction for every initialization is v
 
 ## License
 
-This library is released under the Apache 2.0 License. See [LICENSE](LICENSE) for details.
+This library is released under the Apache 2.0 License. See [LICENSE](LICENSE.md) for details.
 
 ## Contributing
 

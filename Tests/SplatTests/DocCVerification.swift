@@ -25,7 +25,7 @@ import Testing
             self.arguments = arguments
         }
 
-        struct ValidationError: Error {}
+        struct ValidationError: Swift.Error {}
     }
 
     // Test that it compiles and works

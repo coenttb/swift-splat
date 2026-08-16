@@ -228,6 +228,7 @@ public struct SplatMacro: MemberMacro {
                     let cleaned = trimWhitespace(text.trimmingPrefix("///"))
                     // Keep empty lines to preserve DocC paragraph structure
                     docLines.append(cleaned)
+
                 case .docBlockComment(let text):
                     // Remove "/**" and "*/" and clean up each line
                     let lines =
@@ -241,6 +242,7 @@ public struct SplatMacro: MemberMacro {
                         }
                     // Keep empty lines for DocC structure
                     docLines.append(contentsOf: lines)
+
                 default:
                     break
                 }
@@ -351,7 +353,7 @@ public struct SplatMacro: MemberMacro {
             // Group properties by their first path component
             let grouped = Dictionary(grouping: properties) { $0.path.first }
 
-            let args = grouped.sorted { a, b in
+            return grouped.sorted { a, b in
                 // Sort by first path component (nil first, then alphabetically)
                 guard let aKey = a.key else { return true }
                 guard let bKey = b.key else { return false }
@@ -378,8 +380,6 @@ public struct SplatMacro: MemberMacro {
                     )
                 }
             }.joined(separator: ",\n        ")
-
-            return args
         }
 
         let argumentsCallArgs = buildArgumentsInit(properties: properties)
@@ -420,6 +420,7 @@ public struct SplatMacro: MemberMacro {
                     let cleaned = trimWhitespace(text.trimmingPrefix("///"))
                     // Keep empty lines to preserve DocC paragraph structure
                     docLines.append(cleaned)
+
                 case .docBlockComment(let text):
                     let lines =
                         text
@@ -432,6 +433,7 @@ public struct SplatMacro: MemberMacro {
                         }
                     // Keep empty lines for DocC structure
                     docLines.append(contentsOf: lines)
+
                 default:
                     break
                 }
@@ -517,6 +519,7 @@ public struct SplatMacro: MemberMacro {
                     case .docLineComment(let text):
                         let cleaned = trimWhitespace(text.trimmingPrefix("///"))
                         docLines.append(cleaned)
+
                     case .docBlockComment(let text):
                         let lines =
                             text
@@ -528,6 +531,7 @@ public struct SplatMacro: MemberMacro {
                                 return trimWhitespace(trimmed.trimmingPrefix("*"))
                             }
                         docLines.append(contentsOf: lines)
+
                     default:
                         break
                     }
@@ -580,7 +584,7 @@ public struct SplatMacro: MemberMacro {
     }
 }
 
-enum SplatError: Error, CustomStringConvertible {
+enum SplatError: Swift.Error, CustomStringConvertible {
     case noTargetStruct(String)
     case noProperties
 
@@ -588,6 +592,7 @@ enum SplatError: Error, CustomStringConvertible {
         switch self {
         case .noTargetStruct(let name):
             return "@Splat requires a nested struct named '\(name)'"
+
         case .noProperties:
             return "Target struct has no stored properties to splat"
         }

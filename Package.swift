@@ -6,7 +6,7 @@ let package = Package(
     name: "swift-splat",
     platforms: [
         .macOS(.v15),
-        .iOS(.v18)
+        .iOS(.v18),
     ],
     products: [
         .library(
@@ -16,7 +16,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", "602.0.0"..<"603.0.0"),
-        .package(url: "https://github.com/pointfreeco/swift-macro-testing.git", from: "0.5.2")
+        .package(url: "https://github.com/pointfreeco/swift-macro-testing.git", from: "0.5.2"),
     ],
     targets: [
         // Compiler plugin with macro implementation
@@ -24,7 +24,7 @@ let package = Package(
             name: "SplatPlugin",
             dependencies: [
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-                .product(name: "SwiftCompilerPlugin", package: "swift-syntax")
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
             ]
         ),
 
@@ -46,8 +46,8 @@ let package = Package(
             dependencies: [
                 "Splat",
                 "SplatTestFixtures",
-                .product(name: "MacroTesting", package: "swift-macro-testing")
+                .product(name: "MacroTesting", package: "swift-macro-testing"),
             ]
-        )
+        ),
     ]
 )
