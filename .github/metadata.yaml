@@ -2,6 +2,7 @@
 description: "Swift macro for generating convenience initializers by splatting nested struct properties."
 homepage: "https://swift-institute.org"
 topics:
+  - compositions
   - code-generation
   - convenience-initializers
   - spm

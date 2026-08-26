@@ -1,6 +1,6 @@
 # swift-splat
 
-[![CI](https://github.com/coenttb/swift-splat/workflows/CI/badge.svg)](https://github.com/coenttb/swift-splat/actions/workflows/ci.yml)
+[![CI](https://github.com/swift-compositions/swift-splat/actions/workflows/ci.yml/badge.svg)](https://github.com/swift-compositions/swift-splat/actions/workflows/ci.yml)
 ![Development Status](https://img.shields.io/badge/status-active--development-blue.svg)
 
 A Swift macro that generates convenience initializers by "splatting" nested struct properties into individual parameters.
@@ -26,7 +26,7 @@ Add `swift-splat` to your Package.swift:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/coenttb/swift-splat.git", from: "0.3.2")
+    .package(url: "https://github.com/swift-compositions/swift-splat.git", branch: "main")
 ]
 ```
 

@@ -58,7 +58,7 @@ struct InitSyntaxTests {
     // NOTE: There is a Swift compiler bug where callable syntax `Type(args)`
     // doesn't correctly resolve @Splat-generated initializers with backtick-escaped
     // parameter names (names containing spaces) across module boundaries.
-    // See https://github.com/swift-foundations/swift-splat/issues/9.
+    // See https://github.com/swift-compositions/swift-splat/issues/9.
     //
     // The workaround is to use explicit `.init` syntax:
     //   `Type`.init(`param with spaces`: value)  // Works
